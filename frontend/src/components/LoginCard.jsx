@@ -10,17 +10,27 @@ export default function LoginCard() {
 
   const navigate = useNavigate();
 
+  const [isSignup, setIsSignup] = useState(false);
+
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+
+
+  // =========================================================
+  // LOGIN
+  // =========================================================
 
   async function handleLogin() {
 
     if (!username || !password) {
 
-      setError("Please enter your username and password.");
+      setError(
+        "Please enter your username and password."
+      );
 
       return;
     }
@@ -29,6 +39,7 @@ export default function LoginCard() {
 
       setLoading(true);
       setError("");
+      setSuccess("");
 
       const response = await axios.post(
         "http://127.0.0.1:8000/login",
@@ -40,7 +51,6 @@ export default function LoginCard() {
 
       const user = response.data;
 
-      // Store logged-in user
       localStorage.setItem(
         "sqlpilot_user",
         JSON.stringify({
@@ -49,7 +59,6 @@ export default function LoginCard() {
         })
       );
 
-      // Go to dashboard
       navigate("/dashboard");
 
     } catch (error) {
@@ -58,7 +67,9 @@ export default function LoginCard() {
 
       if (error.response?.status === 401) {
 
-        setError("Invalid username or password.");
+        setError(
+          "Invalid username or password."
+        );
 
       } else {
 
@@ -72,6 +83,124 @@ export default function LoginCard() {
       setLoading(false);
 
     }
+  }
+
+
+  // =========================================================
+  // CREATE ACCOUNT
+  // =========================================================
+
+  async function handleSignup() {
+
+    if (!username || !password) {
+
+      setError(
+        "Please enter a username and password."
+      );
+
+      return;
+    }
+
+    if (username.length < 3) {
+
+      setError(
+        "Username must be at least 3 characters."
+      );
+
+      return;
+    }
+
+    if (password.length < 6) {
+
+      setError(
+        "Password must be at least 6 characters."
+      );
+
+      return;
+    }
+
+    try {
+
+      setLoading(true);
+      setError("");
+      setSuccess("");
+
+      const response = await axios.post(
+        "http://127.0.0.1:8000/register",
+        {
+          username,
+          password,
+        }
+      );
+
+      setSuccess(
+        response.data.message ||
+        "Account created successfully!"
+      );
+
+      setUsername("");
+      setPassword("");
+
+      // Switch back to login after successful signup
+      setTimeout(() => {
+
+        setIsSignup(false);
+        setSuccess("");
+
+      }, 1200);
+
+    } catch (error) {
+
+      console.error(error);
+
+      if (error.response?.status === 400) {
+
+        const message =
+          error.response?.data?.detail;
+
+        if (
+          message &&
+          message.toLowerCase().includes("unique")
+        ) {
+
+          setError(
+            "Username already exists."
+          );
+
+        } else {
+
+          setError(
+            message || "Unable to create account."
+          );
+        }
+
+      } else {
+
+        setError(
+          "Unable to connect to the SQLPilot server."
+        );
+      }
+
+    } finally {
+
+      setLoading(false);
+
+    }
+  }
+
+
+  // =========================================================
+  // SWITCH LOGIN / SIGNUP
+  // =========================================================
+
+  function switchMode() {
+
+    setIsSignup(!isSignup);
+
+    setUsername("");
+    setPassword("");
+    setError("");
+    setSuccess("");
   }
 
 
@@ -113,7 +242,7 @@ export default function LoginCard() {
       </div>
 
 
-      {/* Login */}
+      {/* Form */}
 
       <div className="mt-8 space-y-4">
 
@@ -213,15 +342,53 @@ export default function LoginCard() {
         )}
 
 
-        {/* Login Button */}
+        {/* Success */}
 
-        <div onClick={loading ? undefined : handleLogin}>
+        {success && (
+
+          <div className="
+            rounded-xl
+            border
+            border-green-500/20
+            bg-green-500/10
+            px-4
+            py-3
+            text-sm
+            text-green-400
+          ">
+
+            {success}
+
+          </div>
+
+        )}
+
+
+        {/* Main Button */}
+
+        <div
+          onClick={
+            loading
+              ? undefined
+              : isSignup
+                ? handleSignup
+                : handleLogin
+          }
+        >
 
           <CustomButton>
 
             {loading
-              ? "Signing in..."
-              : "Login"
+              ? (
+                isSignup
+                  ? "Creating account..."
+                  : "Signing in..."
+              )
+              : (
+                isSignup
+                  ? "Create Account"
+                  : "Login"
+              )
             }
 
           </CustomButton>
@@ -231,7 +398,7 @@ export default function LoginCard() {
       </div>
 
 
-      {/* Signup */}
+      {/* Switch Login / Signup */}
 
       <p className="
         mt-8
@@ -239,17 +406,28 @@ export default function LoginCard() {
         text-zinc-500
       ">
 
-        Don't have an account?{" "}
+        {isSignup
+          ? "Already have an account?"
+          : "Don't have an account?"
+        }
+
+        {" "}
 
         <button
           type="button"
+          onClick={switchMode}
           className="
             text-blue-400
             hover:text-blue-300
             transition
           "
         >
-          Create Account
+
+          {isSignup
+            ? "Login"
+            : "Create Account"
+          }
+
         </button>
 
       </p>
