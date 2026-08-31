@@ -22,3 +22,7 @@ backend/uploaded_databases/
 # IDE
 .vscode/
 .idea/
+
+# OS
+.DS_Store
+Thumbs.db
