@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from app.auth import login, init_users_table
+from app.auth import login, signup, init_users_table
 from app.upload import router as upload_router
 from app.ai_engine import nl_to_sql_ai
 from app.schema_reader import get_schema
@@ -55,6 +55,11 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+
+
 class SQLRequest(BaseModel):
     prompt: str
     database: str
@@ -91,6 +96,31 @@ def home():
 
     return {
         "message": "Welcome to SQLPilot AI Backend 🚀"
+    }
+
+
+# =========================================================
+# CREATE ACCOUNT
+# =========================================================
+
+@app.post("/register")
+def register_user(data: RegisterRequest):
+
+    success, message = signup(
+        data.username,
+        data.password
+    )
+
+    if not success:
+
+        raise HTTPException(
+            status_code=400,
+            detail=message
+        )
+
+    return {
+        "success": True,
+        "message": message
     }
 
 
@@ -133,18 +163,24 @@ def generate_sql(data: SQLRequest):
         print("GENERATE SQL")
         print("==============================")
 
-        # Normalize database name
         database_name = normalize_database_name(
             data.database
         )
 
-        print("DATABASE FROM FRONTEND:", data.database)
-        print("NORMALIZED DATABASE:", database_name)
-        print("PROMPT:", data.prompt)
+        print(
+            "DATABASE FROM FRONTEND:",
+            data.database
+        )
 
-        # -------------------------------------------------
-        # READ DATABASE SCHEMA
-        # -------------------------------------------------
+        print(
+            "NORMALIZED DATABASE:",
+            database_name
+        )
+
+        print(
+            "PROMPT:",
+            data.prompt
+        )
 
         schema = get_schema(
             database_name
@@ -159,24 +195,24 @@ def generate_sql(data: SQLRequest):
                 f"No tables found in database '{database_name}'."
             )
 
-        # -------------------------------------------------
-        # GENERATE SQL USING AI
-        # -------------------------------------------------
-
         sql = nl_to_sql_ai(
             data.prompt,
             schema
         )
 
-        print("AI SQL:", sql)
+        print(
+            "AI SQL:",
+            sql
+        )
 
-        # -------------------------------------------------
-        # VALIDATE GENERATED SQL
-        # -------------------------------------------------
+        sql = validate_sql(
+            sql
+        )
 
-        sql = validate_sql(sql)
-
-        print("VALIDATED SQL:", sql)
+        print(
+            "VALIDATED SQL:",
+            sql
+        )
 
         print("==============================\n")
 
@@ -223,35 +259,43 @@ def execute_sql(data: ExecuteRequest):
         print("EXECUTE SQL")
         print("==============================")
 
-        # Normalize database name
         database_name = normalize_database_name(
             data.database
         )
 
-        print("DATABASE FROM FRONTEND:", data.database)
-        print("NORMALIZED DATABASE:", database_name)
-        print("SQL FROM FRONTEND:", data.sql)
+        print(
+            "DATABASE FROM FRONTEND:",
+            data.database
+        )
 
-        # -------------------------------------------------
-        # VALIDATE SQL
-        # -------------------------------------------------
+        print(
+            "NORMALIZED DATABASE:",
+            database_name
+        )
+
+        print(
+            "SQL FROM FRONTEND:",
+            data.sql
+        )
 
         sql = validate_sql(
             data.sql
         )
 
-        print("VALIDATED SQL:", sql)
-
-        # -------------------------------------------------
-        # EXECUTE QUERY
-        # -------------------------------------------------
+        print(
+            "VALIDATED SQL:",
+            sql
+        )
 
         rows = execute_query(
             database_name,
             sql
         )
 
-        print("ROWS RETURNED:", len(rows))
+        print(
+            "ROWS RETURNED:",
+            len(rows)
+        )
 
         print("==============================\n")
 

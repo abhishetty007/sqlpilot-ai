@@ -8,39 +8,72 @@ SQLPilot AI converts natural language questions into SQL queries using an AI mod
 
 ## ✨ Features
 
-- 🤖 **Natural Language → SQL**
-  - Ask database questions in plain English.
-  - AI automatically generates the appropriate SQLite query.
+### 🤖 Natural Language → SQL
 
-- 🗄️ **Multiple SQLite Databases**
-  - Upload and select `.db` databases.
-  - Automatically detect available databases and their tables.
+- Ask database questions in plain English.
+- AI automatically generates the appropriate SQLite query.
+- No need to manually write SQL.
 
-- 🧠 **Schema-Aware AI**
-  - The database schema is provided to the AI before generating SQL.
-  - Queries are generated using the available tables and columns.
+### 🗄️ Multiple SQLite Databases
 
-- 🔐 **SQL Validation**
-  - Generated SQL is validated before execution.
-  - Dangerous operations such as `DROP`, `ALTER`, `TRUNCATE`, `PRAGMA`, `ATTACH`, and `DETACH` are blocked.
-  - `UPDATE` and `DELETE` queries require a `WHERE` clause.
-  - Multiple SQL statements are rejected.
+- Upload SQLite `.db` databases.
+- Select databases directly from the application.
+- Automatically detect available databases and their tables.
 
-- ⚡ **Automatic Query Execution**
-  - No need to generate SQL and then manually execute it.
-  - Press **Enter** or click Generate to process the request.
+### 🧠 Schema-Aware AI
 
-- 💬 **Chat-Style Interface**
-  - Conversational database interaction.
-  - Automatically scrolls to the latest response.
-  - Results are displayed directly in the conversation.
+- The selected database schema is read automatically.
+- Tables and columns are provided to the AI before SQL generation.
+- SQL is generated based on the actual database structure.
 
-- 🔑 **Secure API Key Handling**
-  - OpenRouter API key is loaded through environment variables.
-  - `.env` files are excluded from Git.
+### 🔐 SQL Validation
 
-- 👤 **User Authentication**
-  - Login system for accessing the application.
+Generated SQL passes through a validation layer before execution.
+
+The system blocks dangerous operations including:
+
+- `DROP`
+- `ALTER`
+- `TRUNCATE`
+- `PRAGMA`
+- `ATTACH`
+- `DETACH`
+- `VACUUM`
+- `REINDEX`
+- `CREATE`
+
+Additional protection:
+
+- `UPDATE` queries require a `WHERE` clause.
+- `DELETE` queries require a `WHERE` clause.
+- Multiple SQL statements are rejected.
+
+### ⚡ Automatic Query Execution
+
+- Ask a question and press **Enter**.
+- Or click the Generate button.
+- SQL is generated, validated, and executed automatically.
+- No separate "Execute Query" step is required.
+
+### 💬 Chat-Style Interface
+
+- Conversational database interaction.
+- Results appear directly in the conversation.
+- Automatically scrolls to the latest response.
+- Designed to provide an experience similar to modern AI chat applications.
+
+### 👤 User Authentication
+
+- Login system.
+- Create Account functionality.
+- Passwords are securely hashed using bcrypt.
+- User information is stored in SQLite.
+
+### 🔑 Environment-Based API Key
+
+- OpenRouter API key is loaded from environment variables.
+- API keys are not hard-coded into the application.
+- `.env` files are excluded from Git.
 
 ---
 
@@ -61,31 +94,31 @@ Generate SQLite SQL
         ↓
 SQL Validation
         ↓
-Execute query
+Execute Query
         ↓
-Return results
+Return Results
         ↓
-Display results in chat
+Display Results in Chat
+
 
 🛠️ Tech Stack
 Frontend
 React
 Vite
-Tailwind CSS
 JavaScript
+Tailwind CSS
 Lucide React
+Axios
 Backend
 Python
 FastAPI
 Uvicorn
 SQLite
 Pydantic
+bcrypt
 AI
 OpenRouter API
 AI-powered Natural Language → SQL generation
-
-
-
 📁 Project Structure
 NL_TO_SQL_V2/
 │
@@ -95,36 +128,41 @@ NL_TO_SQL_V2/
 │   │   ├── auth.py
 │   │   ├── main.py
 │   │   ├── query_executor.py
+│   │   ├── rule_engine.py
 │   │   ├── schema_reader.py
 │   │   ├── upload.py
 │   │   └── validator.py
 │   │
-│   ├── uploaded_databases/
-│   ├── .env
-│   └── requirements.txt
+│   ├── requirements.txt
+│   └── .env
 │
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
 │   │   │   ├── ChatBox.jsx
+│   │   │   ├── CustomButton.jsx
+│   │   │   ├── CustomInput.jsx
 │   │   │   ├── DatabaseCard.jsx
 │   │   │   ├── Header.jsx
 │   │   │   ├── LoginCard.jsx
+│   │   │   ├── Logo.jsx
 │   │   │   └── Sidebar.jsx
 │   │   │
-│   │   └── pages/
-│   │       └── Dashboard.jsx
+│   │   ├── pages/
+│   │   │   ├── Dashboard.jsx
+│   │   │   └── Login.jsx
+│   │   │
+│   │   ├── App.jsx
+│   │   ├── index.css
+│   │   └── main.jsx
 │   │
 │   ├── package.json
 │   └── vite.config.js
 │
 ├── .gitignore
 └── README.md
-
-
-
 ⚙️ Installation
-1. Clone the repository
+1. Clone the Repository
 git clone https://github.com/abhishetty007/sqlpilot-ai.git
 cd sqlpilot-ai
 🔧 Backend Setup
@@ -136,17 +174,22 @@ cd backend
 Create a virtual environment:
 
 python -m venv venv
+Activate on Windows
 
-Activate it on Windows:
+PowerShell:
+
+venv\Scripts\Activate.ps1
+
+Command Prompt:
 
 venv\Scripts\activate
 
 Install dependencies:
 
-pip install -r requirements.txt
+python -m pip install -r requirements.txt
 🔑 Configure OpenRouter
 
-Create a file:
+Create:
 
 backend/.env
 
@@ -167,9 +210,15 @@ python -m uvicorn app.main:app --reload
 The backend will run at:
 
 http://127.0.0.1:8000
+
+FastAPI documentation is available at:
+
+http://127.0.0.1:8000/docs
 💻 Frontend Setup
 
-Open another terminal and go to:
+Open another terminal.
+
+Go to the frontend directory:
 
 cd frontend
 
@@ -186,19 +235,19 @@ The frontend will normally be available at:
 http://localhost:5173
 🗃️ Using a Database
 
-SQLPilot works with SQLite .db files.
+SQLPilot AI works with SQLite .db files.
 
-You can upload a database through the application and then select it from the database sidebar.
+You can upload a database through the application and select it from the database sidebar.
 
-For example, using the Sakila database:
+For example:
 
 sakila.db
 
-SQLPilot automatically reads its tables and columns before sending the schema to the AI.
+When a database is selected, SQLPilot automatically reads its tables and columns before sending the schema to the AI.
 
 💬 Example Queries
 
-Once a database is selected, you can ask questions such as:
+After selecting a database, you can ask questions such as:
 
 Show all customers
 Show the first 10 actors
@@ -207,15 +256,20 @@ Show customers whose first name is JOHN
 Count the number of customers
 Show all payments greater than 5
 
-The system generates the corresponding SQL, validates it, executes it, and displays the results.
+The application will:
 
+Understand the natural language request.
+Generate SQL using the database schema.
+Validate the generated SQL.
+Execute the query.
+Display the results directly in the conversation.
 🔐 SQL Safety
 
-SQLPilot does not blindly execute AI-generated SQL.
+SQLPilot AI does not blindly execute AI-generated SQL.
 
-Before execution, queries pass through a validation layer.
+Every generated query passes through a validation layer before reaching the database.
 
-Blocked operations
+Blocked Operations
 DROP
 ALTER
 TRUNCATE
@@ -225,25 +279,47 @@ DETACH
 VACUUM
 REINDEX
 CREATE
-Additional protection
+Additional Protection
+UPDATE requires a WHERE clause.
+DELETE requires a WHERE clause.
+Multiple SQL statements are rejected.
+Only supported SQL statement types are accepted.
 
-UPDATE and DELETE statements must contain a WHERE clause.
+This provides an additional safety layer between AI-generated SQL and the database.
 
-Multiple SQL statements are also rejected.
+👤 Authentication
 
-This provides an additional safety layer between the AI-generated query and the database.
+SQLPilot AI includes a basic authentication system.
+
+Users can:
+
+Create a new account.
+Log in with an existing account.
+Access the SQL dashboard after authentication.
+
+Passwords are hashed using bcrypt before being stored.
 
 🖥️ User Interface
 
-SQLPilot provides a conversational interface designed to make database querying feel similar to chatting with an AI assistant.
+SQLPilot AI provides a conversational interface designed to make database querying feel similar to chatting with an AI assistant.
 
-The user can:
+The typical workflow is:
 
-Log in.
-Select a database.
-Ask a question.
-Press Enter or generate the query.
-Receive the database results directly in the conversation.
+Login
+  ↓
+Select Database
+  ↓
+Ask a Question
+  ↓
+Press Enter
+  ↓
+AI Generates SQL
+  ↓
+SQL is Validated
+  ↓
+Query Executes
+  ↓
+Results Appear in Chat
 🔮 Future Improvements
 
 Possible future versions could include:
@@ -262,7 +338,7 @@ Possible future versions could include:
 
 The goal of SQLPilot AI is to make SQL databases easier to interact with by allowing users to communicate with their data using natural language instead of manually writing SQL queries.
 
-It combines:
+The project combines:
 
 AI + Natural Language Processing + SQL + Database Management + Web Development
 
@@ -279,5 +355,3 @@ https://github.com/abhishetty007
 📄 License
 
 This project is intended for educational and development purposes.
-
-
