@@ -1,5 +1,6 @@
 """
 ai_engine.py - OpenRouter AI engine for NL → SQL
+Improved schema-aware SQL generation
 """
 
 import re
@@ -16,7 +17,6 @@ from dotenv import load_dotenv
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
 ENV_FILE = os.path.join(BASE_DIR, ".env")
 
 load_dotenv(ENV_FILE)
@@ -55,46 +55,181 @@ def nl_to_sql_ai(user_input: str, schema: str) -> str:
             "Make sure OPENROUTER_API_KEY is present in backend/.env"
         )
 
+    if not schema or not schema.strip():
+        raise Exception(
+            "Database schema is empty. No tables are available."
+        )
+
+    # --------------------------------------------------------
+    # Extract actual table names from schema
+    # --------------------------------------------------------
+
+    table_names = []
+
+    for line in schema.splitlines():
+
+        line = line.strip()
+
+        if not line:
+            continue
+
+        match = re.match(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\(", line)
+
+        if match:
+            table_names.append(match.group(1))
+
+    available_tables = ", ".join(table_names)
+
+    # --------------------------------------------------------
+    # AI PROMPT
+    # --------------------------------------------------------
+
     prompt = f"""
-You are an expert SQL query generator.
+You are SQLPilot, an expert SQLite SQL generator.
 
-Convert the user's natural language request into a valid SQLite SQL query.
+Your job is to convert the user's natural-language request into
+ONE valid SQLite SQL query using ONLY the database schema provided below.
 
-STRICT RULES:
+============================================================
+CRITICAL DATABASE RULES
+============================================================
 
-1. Output ONLY raw SQL.
-2. No markdown.
-3. No explanations.
-4. No backticks.
-5. Never use DROP.
-6. Never use ALTER.
-7. Never use TRUNCATE.
-8. Never use PRAGMA.
-9. Never use ATTACH.
-10. Never use DETACH.
-11. UPDATE and DELETE must ALWAYS include a WHERE clause.
-12. Use ONLY tables and columns from the provided schema.
-13. If the request cannot be answered using the schema, output:
+1. You MUST use only tables that actually exist in the schema.
+
+2. You MUST use only columns that actually exist in the schema.
+
+3. NEVER invent a table name.
+
+4. NEVER invent a column name.
+
+5. NEVER assume that a natural-language word is a table name.
+
+6. If the user says a common synonym, map it to the closest
+   ACTUAL table in the schema.
+
+Examples:
+
+   "movies" / "films" / "film" -> film
+   "customers" / "customer" -> customer
+   "actors" / "actor" -> actor
+   "payments" / "payment" -> payment
+   "rentals" / "rental" -> rental
+   "staff" / "employees" -> staff
+   "stores" / "store" -> store
+   "cities" / "city" -> city
+   "countries" / "country" -> country
+   "addresses" / "address" -> address
+   "languages" / "language" -> language
+   "categories" / "category" -> category
+   "inventory" / "items" -> inventory ONLY when the
+   user's request clearly refers to inventory items.
+
+IMPORTANT:
+Do NOT blindly create a table from the user's wording.
+
+For example, if the schema contains:
+
+film(film_id, title, ...)
+
+and the user asks:
+
+"show all movies"
+
+the correct query is:
+
+SELECT * FROM film;
+
+NOT:
+
+SELECT * FROM movie;
+
+Similarly, if the user asks:
+
+"show all items"
+
+and the schema contains inventory but does NOT contain item,
+use the closest appropriate existing table only if the meaning
+clearly refers to inventory. Otherwise return:
+
 SELECT 'Not possible' AS message;
 
-DATABASE SCHEMA:
+============================================================
+SCHEMA
+============================================================
+
 {schema}
 
-USER QUESTION:
+============================================================
+ACTUAL TABLES AVAILABLE
+============================================================
+
+{available_tables}
+
+============================================================
+QUERY SAFETY RULES
+============================================================
+
+1. Output ONLY raw SQL.
+2. Do NOT output markdown.
+3. Do NOT output explanations.
+4. Do NOT use backticks.
+5. Generate exactly ONE SQL statement.
+6. Never use DROP.
+7. Never use ALTER.
+8. Never use TRUNCATE.
+9. Never use PRAGMA.
+10. Never use ATTACH.
+11. Never use DETACH.
+12. Never use VACUUM.
+13. Never use REINDEX.
+14. Never use CREATE.
+15. UPDATE queries MUST contain WHERE.
+16. DELETE queries MUST contain WHERE.
+17. INSERT is allowed only when the required table and columns
+    actually exist in the schema.
+18. SELECT queries may use JOINs only when the required
+    tables and columns actually exist.
+19. Never reference a table or column that is not present
+    in the schema.
+
+============================================================
+HANDLING IMPOSSIBLE REQUESTS
+============================================================
+
+If the user's request cannot be answered using the available
+tables and columns, output exactly:
+
+SELECT 'Not possible' AS message;
+
+Do NOT invent a table or column to satisfy the request.
+
+============================================================
+USER QUESTION
+============================================================
+
 {user_input}
 
-SQL:
+============================================================
+RETURN SQL ONLY
+============================================================
 """
 
     payload = json.dumps({
         "model": MODEL,
         "messages": [
             {
+                "role": "system",
+                "content": (
+                    "You generate safe SQLite SQL. "
+                    "You must strictly follow the supplied database schema."
+                )
+            },
+            {
                 "role": "user",
                 "content": prompt
             }
         ],
-        "temperature": 0.1,
+        "temperature": 0.0,
         "max_tokens": 300
     }).encode("utf-8")
 
@@ -155,16 +290,21 @@ SQL:
 
         return cleaned_sql
 
-
     except urllib.error.HTTPError as e:
 
-        error_body = e.read().decode("utf-8", errors="replace")
+        error_body = e.read().decode(
+            "utf-8",
+            errors="replace"
+        )
 
         try:
 
             error_json = json.loads(error_body)
 
-            error_info = error_json.get("error", {})
+            error_info = error_json.get(
+                "error",
+                {}
+            )
 
             message = error_info.get(
                 "message",
@@ -179,13 +319,11 @@ SQL:
             f"OpenRouter HTTP {e.code}: {message}"
         )
 
-
     except urllib.error.URLError as e:
 
         raise Exception(
             f"Network error connecting to OpenRouter: {e.reason}"
         )
-
 
     except Exception as e:
 
@@ -203,6 +341,7 @@ def _clean(raw: str) -> str:
     if not raw:
         return ""
 
+    # Remove markdown code fences
     cleaned = re.sub(
         r"```(?:sql)?",
         "",
@@ -210,9 +349,21 @@ def _clean(raw: str) -> str:
         flags=re.IGNORECASE
     )
 
-    cleaned = cleaned.replace("```", "")
-    cleaned = cleaned.replace("`", "")
+    cleaned = cleaned.replace(
+        "```",
+        ""
+    )
+
+    cleaned = cleaned.replace(
+        "`",
+        ""
+    )
+
     cleaned = cleaned.strip()
+
+    # --------------------------------------------------------
+    # Split lines
+    # --------------------------------------------------------
 
     lines = [
         line.strip()
@@ -228,8 +379,7 @@ def _clean(raw: str) -> str:
         "SELECT",
         "INSERT",
         "UPDATE",
-        "DELETE",
-        "CREATE"
+        "DELETE"
     )
 
     for line in lines:
@@ -250,9 +400,22 @@ def _clean(raw: str) -> str:
 
             sql_lines.append(line)
 
-            if line.endswith(";"):
+            if ";" in line:
                 break
 
-    final_sql = " ".join(sql_lines).strip()
+    final_sql = " ".join(
+        sql_lines
+    ).strip()
+
+    # --------------------------------------------------------
+    # Remove accidental trailing explanation
+    # --------------------------------------------------------
+
+    if ";" in final_sql:
+
+        final_sql = final_sql.split(
+            ";",
+            1
+        )[0].strip() + ";"
 
     return final_sql

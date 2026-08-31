@@ -1,46 +1,42 @@
-import {
-  Send,
-  Paperclip,
-  Database,
-  Sparkles,
-  Copy,
-  Check,
-  Clock,
-  Rows3,
-} from "lucide-react";
+import { useState, useEffect, useRef } from "react";
 
-import { useState } from "react";
-
-export default function ChatBox({ selectedDatabase = "Hospital" }) {
+export default function ChatBox({ selectedDatabase }) {
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // =====================================================
-  // GENERATE SQL + EXECUTE AUTOMATICALLY
-  // =====================================================
+  const chatEndRef = useRef(null);
 
-  async function generateAndExecute() {
+  // Automatically scroll to the newest message/result
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "end",
+    });
+  }, [messages, loading]);
+
+  const generateAndExecute = async () => {
     if (!prompt.trim() || loading) return;
 
     const userPrompt = prompt.trim();
 
-    // Immediately show user's message
+    setPrompt("");
+
+    // Add user message immediately
     setMessages((prev) => [
       ...prev,
       {
         type: "user",
-        prompt: userPrompt,
+        content: userPrompt,
       },
     ]);
 
-    setPrompt("");
     setLoading(true);
 
     try {
-      // =================================================
-      // STEP 1: GENERATE SQL
-      // =================================================
+      // ==========================================
+      // GENERATE SQL
+      // ==========================================
 
       const generateResponse = await fetch(
         "http://127.0.0.1:8000/generate-sql",
@@ -64,17 +60,11 @@ export default function ChatBox({ selectedDatabase = "Hospital" }) {
         );
       }
 
-      if (!generateData.success || !generateData.sql) {
-        throw new Error("No SQL generated.");
-      }
+      const sql = generateData.sql;
 
-      const generatedSQL = generateData.sql;
-
-      // =================================================
-      // STEP 2: EXECUTE SQL
-      // =================================================
-
-      const start = performance.now();
+      // ==========================================
+      // EXECUTE SQL AUTOMATICALLY
+      // ==========================================
 
       const executeResponse = await fetch(
         "http://127.0.0.1:8000/execute-sql",
@@ -85,451 +75,361 @@ export default function ChatBox({ selectedDatabase = "Hospital" }) {
           },
           body: JSON.stringify({
             database: selectedDatabase,
-            sql: generatedSQL,
+            sql: sql,
           }),
         }
       );
 
       const executeData = await executeResponse.json();
 
-      const end = performance.now();
-
-      const executionTime = (
-        (end - start) /
-        1000
-      ).toFixed(3);
-
       if (!executeResponse.ok) {
         throw new Error(
-          executeData.detail || "SQL execution failed."
+          executeData.detail || "Failed to execute SQL."
         );
       }
 
-      // =================================================
-      // ADD AI RESPONSE TO CHAT
-      // =================================================
+      // ==========================================
+      // ADD AI RESPONSE
+      // ==========================================
 
       setMessages((prev) => [
         ...prev,
         {
           type: "assistant",
-          sql: generatedSQL,
+          sql: sql,
           rows: executeData.rows || [],
-          executionTime,
         },
       ]);
     } catch (error) {
-      console.error(error);
+      console.error("Chat error:", error);
 
       setMessages((prev) => [
         ...prev,
         {
           type: "error",
-          message:
-            error.message ||
-            "Unable to connect to the SQLPilot server.",
+          content:
+            error.message || "Something went wrong.",
         },
       ]);
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  // =====================================================
+  // ==========================================
   // ENTER KEY
-  // =====================================================
+  // ==========================================
 
-  function handleKeyDown(e) {
+  const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       generateAndExecute();
     }
-  }
-
-  // =====================================================
-  // COPY SQL
-  // =====================================================
-
-  function SQLBlock({ sql }) {
-    const [copied, setCopied] = useState(false);
-
-    async function copySQL() {
-      try {
-        await navigator.clipboard.writeText(sql);
-
-        setCopied(true);
-
-        setTimeout(() => {
-          setCopied(false);
-        }, 1500);
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    return (
-      <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Sparkles
-              size={15}
-              className="text-blue-400"
-            />
-
-            <span className="text-xs font-semibold text-zinc-400">
-              Generated SQL
-            </span>
-          </div>
-
-          <button
-            onClick={copySQL}
-            className="flex items-center gap-2 rounded-lg px-3 py-1.5 text-xs text-zinc-500 transition hover:bg-zinc-800 hover:text-white"
-          >
-            {copied ? (
-              <>
-                <Check size={14} />
-                Copied
-              </>
-            ) : (
-              <>
-                <Copy size={14} />
-                Copy
-              </>
-            )}
-          </button>
-        </div>
-
-        <pre className="overflow-x-auto p-4 text-sm leading-relaxed text-emerald-400">
-          <code>{sql}</code>
-        </pre>
-      </div>
-    );
-  }
-
-  // =====================================================
-  // RESULTS TABLE
-  // =====================================================
-
-  function ResultsTable({ rows, executionTime }) {
-    if (!rows || rows.length === 0) {
-      return (
-        <div className="mt-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-          <div className="flex items-center gap-2 text-sm text-zinc-400">
-            <Rows3 size={17} />
-            Query executed successfully — no rows returned.
-          </div>
-        </div>
-      );
-    }
-
-    const columns = Object.keys(rows[0]);
-
-    return (
-      <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-950">
-        {/* Result Header */}
-
-        <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Rows3
-              size={17}
-              className="text-blue-400"
-            />
-
-            <span className="text-xs font-semibold text-zinc-300">
-              Query Results
-            </span>
-
-            <span className="text-xs text-zinc-600">
-              {rows.length} row
-              {rows.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs text-zinc-600">
-            <Clock size={13} />
-            {executionTime}s
-          </div>
-        </div>
-
-        {/* Table */}
-
-        <div className="max-h-[420px] overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 bg-zinc-900">
-              <tr className="border-b border-zinc-800">
-                {columns.map((column) => (
-                  <th
-                    key={column}
-                    className="whitespace-nowrap px-4 py-3 text-xs font-semibold uppercase tracking-wider text-zinc-500"
-                  >
-                    {column}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-
-            <tbody>
-              {rows.map((row, index) => (
-                <tr
-                  key={index}
-                  className="border-b border-zinc-900 hover:bg-zinc-900"
-                >
-                  {columns.map((column) => (
-                    <td
-                      key={column}
-                      className="whitespace-nowrap px-4 py-3 text-zinc-300"
-                    >
-                      {String(row[column] ?? "NULL")}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    );
-  }
-
-  // =====================================================
-  // UI
-  // =====================================================
+  };
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col bg-zinc-950">
+    <div className="flex min-h-0 flex-1 flex-col bg-zinc-950">
 
-      {/* =================================================
-          CHAT AREA
-      ================================================= */}
+      {/* ======================================
+          CHAT MESSAGES
+      ====================================== */}
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-6 py-8">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
 
-        <div className="mx-auto w-full max-w-4xl">
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
 
-          {/* Empty State */}
-
+          {/* Empty state */}
           {messages.length === 0 && !loading && (
-            <div className="flex min-h-[55vh] flex-col items-center justify-center text-center">
+            <div className="flex flex-1 items-center justify-center py-32">
 
-              <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10">
-                <Sparkles
-                  size={28}
-                  className="text-blue-400"
-                />
-              </div>
+              <div className="text-center">
 
-              <h1 className="text-4xl font-bold text-white">
-                Ask your database
-              </h1>
+                <h2 className="text-2xl font-semibold text-white">
+                  Ask SQLPilot anything
+                </h2>
 
-              <p className="mt-3 max-w-lg text-zinc-500">
-                Ask a question in plain English.
-                SQLPilot will generate the SQL and
-                run it automatically.
-              </p>
+                <p className="mt-2 text-zinc-500">
+                  Ask questions about your database in natural language.
+                </p>
 
-              <div className="mt-6 flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900 px-4 py-2 text-xs text-zinc-500">
-                <Database size={14} />
-                {selectedDatabase}
+                <div className="mt-6 flex flex-wrap justify-center gap-2">
+
+                  <button
+                    onClick={() =>
+                      setPrompt("Show all customers")
+                    }
+                    className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800"
+                  >
+                    Show all customers
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      setPrompt("Show all films")
+                    }
+                    className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800"
+                  >
+                    Show all films
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      setPrompt("Show all actors")
+                    }
+                    className="rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800"
+                  >
+                    Show all actors
+                  </button>
+
+                </div>
+
               </div>
 
             </div>
           )}
 
-          {/* =================================================
+          {/* ====================================
               MESSAGES
-          ================================================= */}
+          ==================================== */}
 
-          <div className="space-y-8">
+          {messages.map((message, index) => (
 
-            {messages.map((message, index) => (
+            <div key={index}>
 
-              <div key={index}>
+              {/* USER MESSAGE */}
+              {message.type === "user" && (
+                <div className="flex justify-end">
 
-                {/* USER MESSAGE */}
+                  <div className="max-w-[80%] rounded-2xl rounded-br-md bg-blue-600 px-5 py-3 text-white shadow-lg">
 
-                {message.type === "user" && (
-                  <div className="flex justify-end">
-
-                    <div className="max-w-[75%] rounded-3xl bg-blue-600 px-5 py-3.5 text-sm leading-relaxed text-white shadow-lg">
-                      {message.prompt}
-                    </div>
+                    <p className="whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
 
                   </div>
-                )}
 
-                {/* AI RESPONSE */}
+                </div>
+              )}
 
-                {message.type === "assistant" && (
-                  <div className="mt-3 flex gap-4">
+              {/* ASSISTANT RESPONSE */}
+              {message.type === "assistant" && (
+                <div className="mt-4 flex justify-start">
 
-                    {/* AI ICON */}
+                  <div className="w-full max-w-4xl">
 
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
-                      <Sparkles
-                        size={18}
-                        className="text-blue-400"
-                      />
-                    </div>
+                    {/* SQL */}
+                    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
 
-                    {/* RESPONSE */}
+                      <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
 
-                    <div className="min-w-0 flex-1">
-
-                      <div className="mb-2 flex items-center gap-2">
-                        <span className="text-sm font-semibold text-white">
-                          SQLPilot AI
+                        <span className="text-sm font-medium text-zinc-300">
+                          Generated SQL
                         </span>
 
-                        <span className="text-xs text-zinc-600">
-                          {selectedDatabase}
-                        </span>
+                        <button
+                          onClick={() =>
+                            navigator.clipboard.writeText(
+                              message.sql
+                            )
+                          }
+                          className="rounded-lg px-3 py-1.5 text-xs text-zinc-400 transition hover:bg-zinc-800 hover:text-white"
+                        >
+                          Copy
+                        </button>
+
                       </div>
 
-                      <SQLBlock sql={message.sql} />
+                      <pre className="overflow-x-auto p-4 text-sm leading-6 text-green-400">
+                        <code>{message.sql}</code>
+                      </pre>
 
-                      <ResultsTable
-                        rows={message.rows}
-                        executionTime={
-                          message.executionTime
-                        }
-                      />
+                    </div>
+
+                    {/* RESULTS */}
+                    <div className="mt-4 overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+
+                      <div className="border-b border-zinc-800 px-4 py-3">
+
+                        <span className="text-sm font-medium text-zinc-300">
+                          Query Results
+                        </span>
+
+                      </div>
+
+                      {message.rows.length === 0 ? (
+
+                        <div className="p-6 text-sm text-zinc-500">
+                          Query executed successfully. No rows returned.
+                        </div>
+
+                      ) : (
+
+                        <div className="max-h-[500px] overflow-auto">
+
+                          <table className="w-full border-collapse text-sm">
+
+                            <thead className="sticky top-0 bg-zinc-900">
+
+                              <tr>
+
+                                {Object.keys(message.rows[0]).map(
+                                  (column) => (
+                                    <th
+                                      key={column}
+                                      className="whitespace-nowrap border-b border-zinc-800 px-4 py-3 text-left font-medium text-zinc-400"
+                                    >
+                                      {column}
+                                    </th>
+                                  )
+                                )}
+
+                              </tr>
+
+                            </thead>
+
+                            <tbody>
+
+                              {message.rows.map(
+                                (row, rowIndex) => (
+
+                                  <tr
+                                    key={rowIndex}
+                                    className="transition hover:bg-zinc-800/50"
+                                  >
+
+                                    {Object.keys(
+                                      message.rows[0]
+                                    ).map((column) => (
+
+                                      <td
+                                        key={column}
+                                        className="whitespace-nowrap border-b border-zinc-800/70 px-4 py-3 text-zinc-300"
+                                      >
+                                        {row[column] === null
+                                          ? "NULL"
+                                          : String(
+                                              row[column]
+                                            )}
+                                      </td>
+
+                                    ))}
+
+                                  </tr>
+
+                                )
+                              )}
+
+                            </tbody>
+
+                          </table>
+
+                        </div>
+
+                      )}
 
                     </div>
 
                   </div>
-                )}
 
-                {/* ERROR */}
-
-                {message.type === "error" && (
-                  <div className="mt-3 flex gap-4">
-
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-500/10">
-                      <Sparkles
-                        size={18}
-                        className="text-red-400"
-                      />
-                    </div>
-
-                    <div className="rounded-2xl border border-red-500/20 bg-red-500/5 px-5 py-4 text-sm text-red-300">
-                      {message.message}
-                    </div>
-
-                  </div>
-                )}
-
-              </div>
-
-            ))}
-
-            {/* LOADING */}
-
-            {loading && (
-              <div className="flex gap-4">
-
-                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-500/10">
-                  <Sparkles
-                    size={18}
-                    className="animate-pulse text-blue-400"
-                  />
                 </div>
+              )}
 
-                <div className="flex items-center gap-2 rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-4 text-sm text-zinc-500">
+              {/* ERROR */}
+              {message.type === "error" && (
+                <div className="mt-4 flex justify-start">
 
-                  <span className="animate-pulse">
+                  <div className="max-w-[80%] rounded-2xl border border-red-900/50 bg-red-950/30 px-5 py-4 text-sm text-red-300">
+
+                    {message.content}
+
+                  </div>
+
+                </div>
+              )}
+
+            </div>
+
+          ))}
+
+          {/* ====================================
+              LOADING
+          ==================================== */}
+
+          {loading && (
+            <div className="flex justify-start">
+
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-5 py-4">
+
+                <div className="flex items-center gap-3">
+
+                  <div className="flex gap-1">
+
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.3s]" />
+
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500 [animation-delay:-0.15s]" />
+
+                    <span className="h-2 w-2 animate-bounce rounded-full bg-zinc-500" />
+
+                  </div>
+
+                  <span className="text-sm text-zinc-400">
                     Thinking...
                   </span>
 
-                  <span className="text-zinc-700">
-                    •
-                  </span>
-
-                  <span className="animate-pulse">
-                    Running query...
-                  </span>
-
                 </div>
 
               </div>
-            )}
 
-          </div>
+            </div>
+          )}
+
+          {/* Scroll target */}
+          <div ref={chatEndRef} />
 
         </div>
 
       </div>
 
-      {/* =================================================
-          FIXED INPUT AREA
-      ================================================= */}
 
-      <div className="border-t border-zinc-800 bg-zinc-950 px-6 py-4">
+      {/* ======================================
+          INPUT AREA
+      ====================================== */}
+
+      <div className="border-t border-zinc-800 bg-zinc-950 px-4 py-4">
 
         <div className="mx-auto w-full max-w-4xl">
 
-          {/* Database indicator */}
-
-          <div className="mb-2 flex items-center gap-2 px-2 text-xs text-zinc-600">
-
-            <span className="h-2 w-2 rounded-full bg-emerald-400" />
-
-            Using {selectedDatabase}
-
-          </div>
-
-          {/* Input */}
-
-          <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-3 shadow-2xl transition focus-within:border-blue-500/40">
+          <div className="relative flex items-end rounded-2xl border border-zinc-800 bg-zinc-900 shadow-xl transition focus-within:border-zinc-600">
 
             <textarea
-              rows={1}
               value={prompt}
-              onChange={(e) =>
-                setPrompt(e.target.value)
-              }
+              onChange={(e) => setPrompt(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask your database..."
+              placeholder={`Ask about ${selectedDatabase}...`}
               disabled={loading}
-              className="max-h-32 min-h-[44px] w-full resize-none bg-transparent px-3 py-2.5 text-sm leading-relaxed text-white outline-none placeholder:text-zinc-600 disabled:opacity-50"
+              rows={1}
+              className="max-h-40 min-h-[52px] flex-1 resize-none bg-transparent px-4 py-4 pr-14 text-sm text-white outline-none placeholder:text-zinc-600 disabled:cursor-not-allowed disabled:opacity-50"
             />
 
-            <div className="mt-2 flex items-center justify-between">
-
-              <button
-                type="button"
-                className="rounded-xl p-2.5 text-zinc-600 transition hover:bg-zinc-800 hover:text-zinc-300"
-              >
-                <Paperclip size={18} />
-              </button>
-
-              <button
-                onClick={generateAndExecute}
-                disabled={
-                  loading ||
-                  !prompt.trim()
-                }
-                className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <Send size={16} />
-
-                {loading
-                  ? "Running..."
-                  : "Ask"}
-              </button>
-
-            </div>
+            <button
+              onClick={generateAndExecute}
+              disabled={!prompt.trim() || loading}
+              className="absolute bottom-2 right-2 flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 text-white transition hover:bg-blue-500 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-600"
+              title="Generate and execute"
+            >
+              ↑
+            </button>
 
           </div>
 
-          <p className="mt-2 text-center text-[11px] text-zinc-700">
-            Enter to send • Shift + Enter for a new line
+          <p className="mt-2 text-center text-xs text-zinc-600">
+            Press Enter to generate and execute • Shift + Enter for new line
           </p>
 
         </div>
 
       </div>
 
-    </main>
+    </div>
   );
 }
