@@ -1,15 +1,23 @@
-import { Database } from "lucide-react";
+import { Database, Trash2 } from "lucide-react";
 
 export default function DatabaseCard({
   name,
   status,
   selected,
   onClick,
+  onDelete,
 }) {
+  function handleDelete(event) {
+    event.stopPropagation();
+
+    onDelete(name);
+  }
+
   return (
     <div
       onClick={onClick}
       className={`
+        group
         cursor-pointer
         rounded-2xl
         border
@@ -24,13 +32,15 @@ export default function DatabaseCard({
         }
       `}
     >
+
       <div className="flex items-center gap-3">
+
+        {/* Database Icon */}
 
         <div
           className={`
             rounded-xl
             p-3
-
             ${
               selected
                 ? "bg-blue-600"
@@ -41,9 +51,12 @@ export default function DatabaseCard({
           <Database size={22} />
         </div>
 
-        <div>
 
-          <h3 className="font-semibold text-white">
+        {/* Database Info */}
+
+        <div className="min-w-0 flex-1">
+
+          <h3 className="truncate font-semibold text-white">
             {name}
           </h3>
 
@@ -52,6 +65,26 @@ export default function DatabaseCard({
           </p>
 
         </div>
+
+
+        {/* Delete Button */}
+
+        <button
+          onClick={handleDelete}
+          title="Remove database"
+          className="
+            rounded-lg
+            p-2
+            text-zinc-500
+            opacity-0
+            transition-all
+            group-hover:opacity-100
+            hover:bg-red-500/10
+            hover:text-red-400
+          "
+        >
+          <Trash2 size={18} />
+        </button>
 
       </div>
 

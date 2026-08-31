@@ -1,18 +1,24 @@
-# Python virtual environment
-venv/
-
-# Python cache
+# Python
 __pycache__/
 *.pyc
+.venv/
+venv/
 
-# Environment variables
+# Environment
 .env
 
-# SQLite temporary files
-*.db-journal
+# Node
+node_modules/
+dist/
 
-# VS Code
+# SQLite databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded databases
+backend/uploaded_databases/
+
+# IDE
 .vscode/
-
-# macOS
-.DS_Store
+.idea/

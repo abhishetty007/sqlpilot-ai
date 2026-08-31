@@ -1,117 +1,167 @@
-"""
-validator.py - SQL Query Validator
-Allowed:  SELECT, INSERT, UPDATE (with WHERE), DELETE (with WHERE), CREATE TABLE
-Blocked:  DROP, TRUNCATE, ALTER, PRAGMA, UPDATE/DELETE without WHERE
-"""
-
 import re
 
-DANGEROUS = ["DROP", "TRUNCATE", "ALTER", "ATTACH", "DETACH", "PRAGMA", "EXEC","VACCUM","REINDEX","ANALYZE"]
 
+def validate_sql(sql: str) -> str:
+    """
+    Validate SQL before execution.
 
-def classify_query(sql: str) -> dict:
-    if not sql or not sql.strip():
-        return {"type": "UNKNOWN", "allowed": False, "reason": "Query is empty."}
+    Allowed:
+    - SELECT
+    - INSERT
+    - UPDATE
+    - DELETE
 
-    clean = sql.strip()
-    upper = clean.upper()
-    if clean.count(";") > 1:
+    Blocked:
+    - DROP
+    - ALTER
+    - TRUNCATE
+    - PRAGMA
+    - ATTACH
+    - DETACH
+    - VACUUM
+    - REINDEX
+    - CREATE
 
-     return {
-        "type": "DANGEROUS",
-        "allowed": False,
-        "reason": "🚫 Multiple SQL statements are not allowed."
-    }    
-    words = upper.split()
-    first = words[0] if words else ""
-    second = words[1] if len(words) > 1 else ""
+    UPDATE and DELETE must contain WHERE.
+    Multiple SQL statements are not allowed.
+    """
 
-    # Hard block dangerous keywords
-    for kw in DANGEROUS:
-        if re.search(rf"\b{kw}\b", upper):
-            return {"type": "DANGEROUS", "allowed": False,
-                    "reason": f"🚫 '{kw}' is permanently blocked — it can cause irreversible damage."}
+    # =====================================================
+    # BASIC VALIDATION
+    # =====================================================
 
-    if first == "SELECT":
-        return {"type": "SELECT", "allowed": True, "reason": "✅ Safe read query."}
+    if not sql or not isinstance(sql, str):
 
-    if first == "INSERT":
-        return {"type": "INSERT", "allowed": True, "reason": "✅ Insert operation allowed."}
+        raise ValueError(
+            "SQL is empty or invalid."
+        )
 
-    if first == "UPDATE":
+    # =====================================================
+    # CLEAN AI RESPONSE
+    # =====================================================
 
-        if not re.search(r"\bWHERE\b", upper):
+    sql = sql.strip()
 
-            return {
-                "type": "UPDATE",
-                "allowed": False,
-                "reason": "⚠️ UPDATE without WHERE is blocked — it would modify ALL rows."
-            }
+    # Remove markdown code fences
+    sql = re.sub(
+        r"```(?:sql)?",
+        "",
+        sql,
+        flags=re.IGNORECASE
+    )
 
-        dangerous_patterns = [
-            r"WHERE\s+1\s*=\s*1",
-            r"WHERE\s+ID\s+IS\s+NOT\s+NULL",
-            r"WHERE\s+TRUE"
-        ]
+    sql = sql.replace("```", "")
+    sql = sql.replace("`", "")
+    sql = sql.strip()
 
-        for pattern in dangerous_patterns:
+    if not sql:
 
-            if re.search(pattern, upper):
+        raise ValueError(
+            "SQL is empty after cleaning."
+        )
 
-                return {
-                    "type": "UPDATE",
-                    "allowed": False,
-                    "reason": "🚫 Dangerous mass UPDATE detected and blocked."
-                }
+    # =====================================================
+    # NORMALIZED SQL
+    # =====================================================
 
-        return {
-            "type": "UPDATE",
-            "allowed": True,
-            "reason": "✅ Update operation allowed."
-        }
+    upper_sql = sql.upper()
 
+    # Remove trailing semicolon for checking
+    check_sql = upper_sql.rstrip(";").strip()
 
-    if first == "DELETE":
+    # =====================================================
+    # ONLY ONE SQL STATEMENT
+    # =====================================================
 
-        if not re.search(r"\bWHERE\b", upper):
+    if ";" in check_sql:
 
-            return {
-                "type": "DELETE",
-                "allowed": False,
-                "reason": "⚠️ DELETE without WHERE is blocked — it would delete ALL rows."
-            }
+        raise ValueError(
+            "Multiple SQL statements are not allowed."
+        )
 
-        dangerous_patterns = [
-            r"WHERE\s+1\s*=\s*1",
-            r"WHERE\s+ID\s+IS\s+NOT\s+NULL",
-            r"WHERE\s+TRUE"
-        ]
+    # =====================================================
+    # ALLOWED STATEMENTS
+    # =====================================================
 
-        for pattern in dangerous_patterns:
+    allowed = (
+        "SELECT",
+        "INSERT",
+        "UPDATE",
+        "DELETE"
+    )
 
-            if re.search(pattern, upper):
+    if not check_sql.startswith(allowed):
 
-                return {
-                    "type": "DELETE",
-                    "allowed": False,
-                    "reason": "🚫 Dangerous mass DELETE detected and blocked."
-                }
+        raise ValueError(
+            "Only SELECT, INSERT, UPDATE and DELETE "
+            "queries are allowed."
+        )
 
-        return {
-            "type": "DELETE",
-            "allowed": True,
-            "reason": "✅ Delete operation allowed."
-        }
-    if first == "CREATE" and second == "TABLE":
-        return {"type": "CREATE", "allowed": True, "reason": "✅ Create table operation allowed."}
+    # =====================================================
+    # BLOCK DANGEROUS COMMANDS
+    # =====================================================
 
-    return {"type": "UNKNOWN", "allowed": False,
-            "reason": f"❌ Unrecognized query type '{first}'. Allowed: SELECT, INSERT, UPDATE, DELETE, CREATE TABLE."}
+    forbidden = [
+        "DROP",
+        "ALTER",
+        "TRUNCATE",
+        "PRAGMA",
+        "ATTACH",
+        "DETACH",
+        "VACUUM",
+        "REINDEX",
+        "CREATE",
+    ]
 
+    for keyword in forbidden:
 
-def validate_and_report(sql: str) -> dict:
-    result = classify_query(sql)
-    result["is_valid"] = result["allowed"]
-    result["message"] = result["reason"]
-    result["sql"] = sql.strip()
-    return result
+        if re.search(
+            rf"\b{keyword}\b",
+            upper_sql
+        ):
+
+            raise ValueError(
+                f"Unsafe SQL detected: {keyword}"
+            )
+
+    # =====================================================
+    # UPDATE MUST HAVE WHERE
+    # =====================================================
+
+    if re.match(
+        r"^\s*UPDATE\b",
+        upper_sql
+    ):
+
+        if not re.search(
+            r"\bWHERE\b",
+            upper_sql
+        ):
+
+            raise ValueError(
+                "UPDATE queries must contain a WHERE clause."
+            )
+
+    # =====================================================
+    # DELETE MUST HAVE WHERE
+    # =====================================================
+
+    if re.match(
+        r"^\s*DELETE\b",
+        upper_sql
+    ):
+
+        if not re.search(
+            r"\bWHERE\b",
+            upper_sql
+        ):
+
+            raise ValueError(
+                "DELETE queries must contain a WHERE clause."
+            )
+
+    # =====================================================
+    # RETURN CLEAN SQL
+    # =====================================================
+
+    return sql
